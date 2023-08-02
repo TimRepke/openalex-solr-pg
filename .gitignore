@@ -1,0 +1,23 @@
+# OS generated files #
+######################
+**/.DS_Store
+**/.DS_Store?
+**/._*
+**/.ipynb_checkpoints
+**/__pycache__/**
+*.pyc
+
+*.so
+*.c
+*.env
+
+
+# Local Directories #
+#####################
+
+local/
+.idea/
+venv/
+data/
+build/
+configset/
