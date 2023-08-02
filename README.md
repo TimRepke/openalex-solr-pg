@@ -86,11 +86,14 @@ Only running initial solr import:
 * Solr does only contain fields from the works objects (and not even all of them). We think that if you need more details, you can use postgres.
 * Solr includes nested objects and non-indexed json strings. This makes hosting much easier, but you can't properly filter for authors.
 
-## Runtimes
-The flattening of the whole snapshot for postgres takes around 1.5h, importing those flattened files takes around 15h. Note, that the latter can probably be improved significantly by tuning hosting parameters. If you do, please let us know.
-
-The Solr import (pre-processing and import happens simultaneously) takes around 12h.
-
-RAM usage of the scripts is below 200MB, since everything is processed sequentially and no big objects are kept in memory.
+## Runtimes and storage
+* The flattening of the whole snapshot for postgres takes around 1.5h, importing those flattened files takes around 15h. Note, that the latter can probably be improved significantly by tuning hosting parameters. If you do, please let us know.
+* The Solr import (pre-processing and import happens simultaneously) takes around 12h.
+* RAM usage of the scripts is below 200MB, since everything is processed sequentially and no big objects are kept in memory.
+* The solr-home folder has a size of around 340GB after the initial full snapshot import.
+* The openalex-snapshot folder has a size of around 312GB
+* The flattened postgres files have a size of around 163GB
+* The `/var/lib/postgresql/15/main/base` folder is around 1TB after the initial full snapshot import.
+* The temporary solr files usually around 1GB, but since each partition is processed one-by-one, there's no significant storage need here.
 
 
