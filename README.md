@@ -1,10 +1,12 @@
 # Self-hosted academic search
+
 This repository hosts a series of helper scripts and some guidance on how to self-host [OpenAlex](https://docs.openalex.org/) in Solr and/or PostgreSQL.
 
 These scripts can be used for the initial import and continuous updates of an existing database as snapshots are updated.
 
 If you have any recommendations for improving the performance or better data structures, please get in touch by submitting a pull request or opening an issue.
 
+The folder `old` contains work by Joe on the exploration of self-hosting OpenAlex, CORE, SemanticScholar, and other databases.
 
 ## Updating OpenAlex
 The general "strategy" is as follows:
@@ -35,7 +37,7 @@ Here are some helpful commands for starting, stopping, or managing solr:
 cd /srv/solr
 
 # starting solr
-sudo -u solr solr/bin/solr start -c -h 0.0.0.0 -m 6g -s /srv/solr/solr-home -Denable.packages=true -Dsolr.modules=sql,clustering -Dsolr.max.booleanClauses=4096
+sudo -u solr solr/bin/solr start -c -h 0.0.0.0 -m 20g -s /srv/solr/solr-home -Denable.packages=true -Dsolr.modules=sql,clustering -Dsolr.max.booleanClauses=4096
 
 # stop and monitor solr
 sudo -u solr solr/bin/solr stop
@@ -86,11 +88,31 @@ Only running initial solr import:
 * Solr does only contain fields from the works objects (and not even all of them). We think that if you need more details, you can use postgres.
 * Solr includes nested objects and non-indexed json strings. This makes hosting much easier, but you can't properly filter for authors.
 
-## Runtimes
-The flattening of the whole snapshot for postgres takes around 1.5h, importing those flattened files takes around 15h. Note, that the latter can probably be improved significantly by tuning hosting parameters. If you do, please let us know.
+## Runtimes and storage
+* The flattening of the whole snapshot for postgres takes around 1.5h, importing those flattened files takes around 15h. Note, that the latter can probably be improved significantly by tuning hosting parameters. If you do, please let us know.
+* The Solr import (pre-processing and import happens simultaneously) takes around 12h.
+* RAM usage of the scripts is below 200MB, since everything is processed sequentially and no big objects are kept in memory.
+* The solr-home folder has a size of around 340GB after the initial full snapshot import.
+* The openalex-snapshot folder has a size of around 312GB
+* The flattened postgres files have a size of around 163GB
+* The `/var/lib/postgresql/15/main/base` folder is around 1TB after the initial full snapshot import.
+* The temporary solr files usually around 1GB, but since each partition is processed one-by-one, there's no significant storage need here.
 
-The Solr import (pre-processing and import happens simultaneously) takes around 12h.
+## Some admin tricks
+```bash
+# See which postgres DBs are running
+pg_lsclusters
 
-RAM usage of the scripts is below 200MB, since everything is processed sequentially and no big objects are kept in memory.
+# Create another database instance
+pg_createcluster 16 main -p 5439  # change "main" and "5439"
 
+# Adjust settings in the /etc/postgresql/[version]/[name]/hba_conf.conf
+# (esp. connection via external IP and login as user)
+# Adjust settings in the /etc/postgresql/[version]/[name]/postgres.conf
+# (esp. listen_address=0.0.0.0 and port)
 
+# Create the "oa" database
+sudo -u postgres createdb -p 5433 oa
+# Open SQL console
+sudo -u postgres psql -p  5433 oa
+```

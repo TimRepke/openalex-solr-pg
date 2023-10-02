@@ -1,10 +1,3 @@
---
--- PostgreSQL database dump
---
-
--- Dumped from database version 13.5 (Ubuntu 13.5-2.heroku1+1)
--- Dumped by pg_dump version 14.1
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -234,10 +227,18 @@ CREATE TABLE openalex.works_authorships
     work_id          text NOT NULL,
     author_id        text, -- this should never be null, but some are
     position         text,
-    institutions     text[],
+    exact_position   int,
     raw_affiliation  text,
+    raw_author_name  text,
     is_corresponding boolean
+);
+CREATE TABLE openalex.works_authorship_institutions
+(
+    work_id        text NOT NULL,
+    author_id      text NOT NULL,
+    institution_id text NOT NULL,
 
+    PRIMARY KEY (work_id, author_id, institution_id)
 );
 CREATE TABLE openalex.works_locations
 (
@@ -245,6 +246,7 @@ CREATE TABLE openalex.works_locations
     work_id          text NOT NULL,
     source_id        text, -- this should never be null, but some are
     is_oa            boolean,
+    is_primary       boolean,
     landing_page_url text,
     license          text,
     pdf_url          text,
@@ -257,6 +259,15 @@ CREATE TABLE openalex.works_concepts
     score      real,
 
     PRIMARY KEY (work_id, concept_id)
+);
+CREATE TABLE openalex.works_sdgs
+(
+    work_id      text NOT NULL,
+    sdg_id       text NOT NULL,
+    display_name text,
+    score        real,
+
+    PRIMARY KEY (work_id, sdg_id)
 );
 CREATE TABLE openalex.works_references
 (
@@ -272,6 +283,12 @@ CREATE TABLE openalex.works_related
 
     PRIMARY KEY (work_a_id, work_b_id)
 );
+
+-- CREATE INDEX works_id_doi_idx ON openalex.works USING hash (id_doi);
+-- CREATE INDEX IF NOT EXISTS works_publication_year_idx ON openalex.works USING btree (id_doi);
+
+-- DROP INDEX IF EXISTS works_id_doi_idx;
+-- DROP INDEX IF EXISTS works_publication_year_idx;
 
 
 -- old stuff for reference:

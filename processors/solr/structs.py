@@ -57,6 +57,8 @@ class DehydratedSource(Struct, omit_defaults=True, kw_only=True):
 
 
 class Location(Struct, omit_defaults=True, kw_only=True):
+    # is_accepted: bool | None = None
+    # is_published: bool | None = None
     is_oa: bool | None = None
     landing_page_url: str | None = None
     license: str | None = None
@@ -65,8 +67,18 @@ class Location(Struct, omit_defaults=True, kw_only=True):
     version: str | None = None
 
 
+class LocationOut(Struct, omit_defaults=True, kw_only=True):
+    is_oa: bool | None = None
+    is_primary: bool | None = None
+    landing_page_url: str | None = None
+    license: str | None = None
+    source: DehydratedSource | None = None
+    pdf_url: str | None = None
+    version: str | None = None
+
+
 class Work(Struct, kw_only=True, omit_defaults=True):
-    abstract_inverted_index: str | None = None
+    abstract_inverted_index: dict[str, list[int]] | None = None
     authorships: list[Authorship] | None = None
     # apc_list
     # apc_paid
@@ -81,7 +93,6 @@ class Work(Struct, kw_only=True, omit_defaults=True):
     created_date: str | None = None
     display_name: str | None = None
     doi: str | None = None
-
     # grants
     id: str | None = None
     ids: WorkIds | None = None
@@ -89,25 +100,22 @@ class Work(Struct, kw_only=True, omit_defaults=True):
     is_paratext: bool | None = None
     is_retracted: bool | None = None
     language: str | None = None
-    # license:str
+    # license
     locations: list[Location] | None = None
     # locations_count
     # mesh
     # ngrams_url
     # open_access
-    # primary_location
+    primary_location: Location | None = None
     publication_date: str | None = None
     publication_year: int | None = None
     # referenced_works
     # related_works
+    # sustainable_development_goals
     title: str | None = None
     type: str | None = None
     # type_crossref
     updated_date: str | None = None
-    # ngram
-    # ngram_count
-    # ngram_tokens
-    # term_frequency
 
 
 class WorkOut(Struct, kw_only=True, omit_defaults=True):

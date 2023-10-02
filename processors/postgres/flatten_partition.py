@@ -88,8 +88,8 @@ def flatten_authors_partition(partition: Path | str,
                 'i10_index': author.summary_stats.i10_index,
                 'display_name': author.display_name,
                 'display_name_alternatives': prepare_list(author.display_name_alternatives),
-                'last_known_institution': strip_id(author.last_known_institution.id) \
-                    if author.last_known_institution is not None else None,
+                'last_known_institution': (strip_id(author.last_known_institution.id)
+                                           if author.last_known_institution is not None else None),
                 'id_mag': author.ids.mag,
                 'id_orcid': author.ids.orcid,
                 'id_scopus': author.ids.scopus,
@@ -558,8 +558,10 @@ def flatten_works_partition(partition: Path | str,
                             out_m2m_locations: Path | str,
                             out_m2m_concepts: Path | str,
                             out_m2m_authorships: Path | str,
+                            out_m2m_authorship_institutions: Path | str,
                             out_m2m_references: Path | str,
                             out_m2m_related: Path | str,
+                            out_m2m_sdgs: Path | str,
                             preserve_ram: bool):
     logging.info(f'Flattening partition file {partition}')
     partition: Path = Path(partition)
@@ -569,16 +571,20 @@ def flatten_works_partition(partition: Path | str,
     out_m2m_locations: Path = Path(out_m2m_locations)
     out_m2m_concepts: Path = Path(out_m2m_concepts)
     out_m2m_authorships: Path = Path(out_m2m_authorships)
+    out_m2m_authorship_institutions: Path = Path(out_m2m_authorship_institutions)
     out_m2m_references: Path = Path(out_m2m_references)
     out_m2m_related: Path = Path(out_m2m_related)
+    out_m2m_sdgs: Path = Path(out_m2m_sdgs)
     startTime = time.time()
 
     with (gzip.open(out_works, 'wt', encoding='utf-8') as f_works,
           gzip.open(out_m2m_locations, 'wt', encoding='utf-8') as f_locations,
           gzip.open(out_m2m_concepts, 'wt', encoding='utf-8') as f_concepts,
           gzip.open(out_m2m_authorships, 'wt', encoding='utf-8') as f_authorships,
+          gzip.open(out_m2m_authorship_institutions, 'wt', encoding='utf-8') as f_authorship_institutions,
           gzip.open(out_m2m_references, 'wt', encoding='utf-8') as f_references,
           gzip.open(out_m2m_related, 'wt', encoding='utf-8') as f_related,
+          gzip.open(out_m2m_sdgs, 'wt', encoding='utf-8') as f_sdgs,
           open(out_sql_del, 'w') as f_sql_del,
           open(out_sql_cpy, 'w') as f_sql_cpy,
           gzip.open(partition, 'rb') as f_in):
@@ -591,16 +597,18 @@ def flatten_works_partition(partition: Path | str,
             'apc_paid', 'apc_list', 'license', 'cited_by_count',
             'is_paratext', 'is_retracted', 'mesh', 'grants',
             'created_date', 'updated_date'])
-        writer_authorships = get_writer(f_authorships, ['work_id', 'author_id', 'position', 'institutions',
-                                                        'raw_affiliation', 'is_corresponding'])
+        writer_authorships = get_writer(f_authorships, ['work_id', 'author_id', 'position', 'exact_position',
+                                                        'raw_author_name', 'raw_affiliation', 'is_corresponding'])
+        writer_authorship_institutions = get_writer(f_authorship_institutions, ['work_id', 'author_id',
+                                                                                'institution_id'])
         writer_locations = get_writer(f_locations, ['work_id', 'source_id', 'is_oa', 'landing_page_url',
                                                     'license', 'pdf_url', 'version'])
         writer_concepts = get_writer(f_concepts, ['work_id', 'concept_id', 'score'])
         writer_references = get_writer(f_references, ['work_a_id', 'work_b_id'])
         writer_related = get_writer(f_related, ['work_a_id', 'work_b_id'])
+        writer_sdgs = get_writer(f_sdgs, ['work_id', 'sdg_id', 'display_name', 'score'])
 
         decoder = Decoder(structs.Work)
-        decoder_ia = Decoder(structs.InvertedAbstract)
         encoder = Encoder()
         n_works = 0
         n_abstracts = 0
@@ -620,9 +628,7 @@ def flatten_works_partition(partition: Path | str,
             abstract = None
             if work.abstract_inverted_index is not None:
                 try:
-                    ia = decoder_ia.decode(work.abstract_inverted_index)
-                    inverted_abstract = ia.InvertedIndex
-                    abstract = invert(inverted_abstract, ia.IndexLength)
+                    abstract = invert(work.abstract_inverted_index)
                     if len(abstract.strip()) > 0:
                         n_abstracts += 1
                     else:
@@ -679,18 +685,25 @@ def flatten_works_partition(partition: Path | str,
                 'updated_date': work.updated_date
             })
 
-            for author in work.authorships:
-                institutions = None
-                if author.institutions is not None and len(author.institutions) > 0:
-                    institutions = [strip_id(i.id) for i in author.institutions]
+            for ai, author in enumerate(work.authorships):
+                aid = strip_id(author.author.id) if author.author is not None else None
                 writer_authorships.writerow({
                     'work_id': wid,
-                    'author_id': strip_id(author.author.id) if author.author is not None else None,
+                    'author_id': aid,
                     'position': author.author_position,
-                    'institutions': prepare_list(institutions),
+                    'exact_position': ai,
                     'raw_affiliation': author.raw_affiliation_string,
+                    'raw_author_name': author.raw_author_name,
                     'is_corresponding': author.is_corresponding
                 })
+                if author.institutions is not None and len(author.institutions) > 0:
+                    for institution in author.institutions:
+                        writer_authorship_institutions.writerow({
+                            'work_id': wid,
+                            'author_id': aid,
+                            'institution_id': strip_id(institution.id)
+                        })
+
             if work.locations is not None:
                 for location in work.locations:
                     writer_locations.writerow({
@@ -698,16 +711,32 @@ def flatten_works_partition(partition: Path | str,
                         'source_id': strip_id(location.source.id) if location.source is not None else None,
                         'is_oa': location.is_oa,
                         'landing_page_url': location.landing_page_url,
+                        'is_primary': (work.primary_location is not None
+                                       and work.primary_location.source is not None
+                                       and location.source is not None
+                                       and work.primary_location.source.id == location.source.id
+                                       and work.primary_location.source.display_name == location.source.display_name
+                                       and work.primary_location.pdf_url == location.pdf_url
+                                       and work.primary_location.version == location.version),
                         'license': location.license,
                         'pdf_url': location.pdf_url,
                         'version': location.version
                     })
+
             for concept in work.concepts:
                 writer_concepts.writerow({
                     'work_id': wid,
                     'concept_id': strip_id(concept.id),
                     'score': concept.score
                 })
+            if work.sustainable_development_goals is not None and len(work.sustainable_development_goals) > 0:
+                for sdg in work.sustainable_development_goals:
+                    writer_sdgs.writerow({
+                        'work_id': wid,
+                        'sdg_id': sdg.id,
+                        'display_name': sdg.display_name,
+                        'score': sdg.score
+                    })
             for ref in work.referenced_works:
                 writer_references.writerow({
                     'work_a_id': wid,
@@ -730,10 +759,15 @@ def flatten_works_partition(partition: Path | str,
                         f"FROM PROGRAM 'gunzip -c {out_m2m_concepts.absolute()}' csv header;\n\n")
         f_sql_cpy.write(f"COPY {settings.pg_schema}.works_authorships ({fieldnames(writer_authorships)}) "
                         f"FROM PROGRAM 'gunzip -c {out_m2m_authorships.absolute()}' csv header;\n\n")
+        f_sql_cpy.write(
+            f"COPY {settings.pg_schema}.works_authorship_institutions ({fieldnames(writer_authorship_institutions)}) "
+            f"FROM PROGRAM 'gunzip -c {out_m2m_authorship_institutions.absolute()}' csv header;\n\n")
         f_sql_cpy.write(f"COPY {settings.pg_schema}.works_references ({fieldnames(writer_references)}) "
                         f"FROM PROGRAM 'gunzip -c {out_m2m_references.absolute()}' csv header;\n\n")
         f_sql_cpy.write(f"COPY {settings.pg_schema}.works_related ({fieldnames(writer_related)}) "
                         f"FROM PROGRAM 'gunzip -c {out_m2m_related.absolute()}' csv header;\n\n")
+        f_sql_cpy.write(f"COPY {settings.pg_schema}.works_sdgs ({fieldnames(writer_sdgs)}) "
+                        f"FROM PROGRAM 'gunzip -c {out_m2m_sdgs.absolute()}' csv header;\n\n")
 
     executionTime = (time.time() - startTime)
     mins = int(executionTime / 60)
